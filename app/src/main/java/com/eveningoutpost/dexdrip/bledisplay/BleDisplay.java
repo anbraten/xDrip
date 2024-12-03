@@ -33,6 +33,12 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
     private static final int QUEUE_EXPIRED_TIME = 30; //second
     private static final int QUEUE_DELAY = 0; //ms
 
+    {
+        mState = new BleDisplayState().setLI(I);
+        I.autoConnect = true;
+        // I.connectTimeoutMinutes = (int) CONNECTION_TIMEOUT;
+    }
+
 
     @Override
     public void onCreate() {
@@ -67,6 +73,7 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
                     switch (function) {
                         case "sendglucose":
                             sendGlucose();
+                            changeState(INIT);
                             break;
                         default:
                             UserError.Log.e(TAG, "Unknown function: " + function);
@@ -89,7 +96,7 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
     static final List<UUID> huntCharacterstics = new ArrayList<>();
 
     static {
-        // huntCharacterstics.add(Constants.BATTERY); // specimen TODO improve
+        huntCharacterstics.add(UUID.fromString(BLE_CHARACTERISTIC_UUID));
     }
 
 
@@ -123,19 +130,48 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
         AlertMessage message = new AlertMessage();
         if (last == null || last.isStale()) {
             return false;
-        } else {
-            // TODO: send proper bg message
-            String messageText = "BG: " + last.displayValue(null) + " " + last.displaySlopeArrow();
-            UserError.Log.uel(TAG, "Send alert msg: " + messageText);
-            new QueueMe()
-                    .setBytes(message.getAlertMessageOld(messageText.toUpperCase(), AlertMessage.AlertCategory.SMS_MMS))
-                    .setDescription("Send alert msg: " + messageText)
-                    .setQueueWriteCharacterstic(UUID.fromString(BLE_CHARACTERISTIC_UUID))
-                    .expireInSeconds(QUEUE_EXPIRED_TIME)
-                    .setDelayMs(QUEUE_DELAY)
-                    .queue();
         }
+
+        byte opCode = 0x10;
+
+        // create text to send, reading value, one space, timestamp in seconds
+        long timestampSeconds = last.timestamp / 1000 / 1000;
+        String messageText = String.format("%d %d", Math.round(last.getDg_mgdl()), timestampSeconds);
+
+        byte[] msg = new byte[messageText.length() + 1];
+        msg[0] = opCode;
+        for (int i = 0; i < messageText.length(); i++) {
+            msg[i + 1] = (byte) messageText.charAt(i);
+        }
+
+        UserError.Log.uel(TAG, "Send alert msg: " + messageText + " ::: " + msg.length);
+        new QueueMe()
+                .setBytes(msg)
+                .setDescription("Send glucose value: " + messageText)
+                .setQueueWriteCharacterstic(UUID.fromString(BLE_CHARACTERISTIC_UUID))
+                .expireInSeconds(QUEUE_EXPIRED_TIME)
+                .setDelayMs(QUEUE_DELAY)
+                .queue();
+
         return true;
+    }
+
+    static class BleDisplayState extends JamBaseBluetoothSequencer.BaseState {
+        static final String AUTHENTICATE = "Authenticate";
+
+        {
+            sequence.clear();
+
+            sequence.add(INIT);
+            sequence.add(CONNECT_NOW);
+            sequence.add(DISCOVER); // automatically executed
+            sequence.add(AUTHENTICATE);
+            //
+            sequence.add(SEND_QUEUE);
+            sequence.add(SLEEP);
+            //
+
+        }
     }
 
     @Override
@@ -149,8 +185,9 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
                     // connect by default
                     changeNextState();
                     break;
-                case SLEEP:
-                    sendGlucose();
+                case BleDisplayState.AUTHENTICATE:
+                    // TODO: authenticate
+                    changeNextState();
                     break;
                 default:
                     return super.automata();
