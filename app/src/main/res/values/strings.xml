@@ -1265,6 +1265,10 @@
     <string name="title_fetch_iob_from_companion_app">Fetch IoB from companion app</string>
     <string name="summary_fetch_iob_from_companion_app">Fetch IoB value from companion app running on the same device, such as the Omnipod 5 App</string>
 
+    <string name="title_ble_display">BLE Display</string>
+    <string name="title_ble_display_enable">Send glucose to BLE Display</string>
+    <string name="title_ble_display_mac">Mac address</string>
+
     <string name="title_miband">MiBand</string>
     <string name="summary_miband_enable">Sync Data with MiBand fitness bands</string>
     <string name="title_miband_enable">Use MiBand Band</string>
