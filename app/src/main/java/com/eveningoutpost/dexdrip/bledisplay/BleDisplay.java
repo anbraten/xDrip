@@ -6,17 +6,14 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.os.PowerManager;
-import com.eveningoutpost.dexdrip.insulin.inpen.Constants;
 import com.eveningoutpost.dexdrip.models.BgReading;
 import com.eveningoutpost.dexdrip.models.JoH;
 import com.eveningoutpost.dexdrip.models.UserError;
 import com.eveningoutpost.dexdrip.services.JamBaseBluetoothSequencer;
 import com.eveningoutpost.dexdrip.utilitymodels.Pref;
-import com.eveningoutpost.dexdrip.watch.miband.FindNearby;
 import com.eveningoutpost.dexdrip.watch.miband.message.AlertMessage;
 import com.polidea.rxandroidble2.RxBleDeviceServices;
 import static com.eveningoutpost.dexdrip.models.JoH.emptyString;
-import static com.eveningoutpost.dexdrip.services.JamBaseBluetoothSequencer.BaseState.CLOSE;
 import static com.eveningoutpost.dexdrip.services.JamBaseBluetoothSequencer.BaseState.INIT;
 import static com.eveningoutpost.dexdrip.services.JamBaseBluetoothSequencer.BaseState.SLEEP;
 
@@ -31,6 +28,7 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
     private static final String BLE_CHARACTERISTIC_UUID = "6D810E9F-0983-4030-BDA7-C7C9A6A19C1C";
 
     public static final String PREF_BLE_DISPLAY_ENABLED = "ble_display_enabled";
+    public static final String PREF_BLE_DISPLAY_MAC = "ble_display_mac";
 
     private static final int QUEUE_EXPIRED_TIME = 30; //second
     private static final int QUEUE_DELAY = 0; //ms
@@ -48,51 +46,37 @@ public class BleDisplay extends JamBaseBluetoothSequencer {
         try {
             // InPenEntry.started_at = JoH.tsl();
             UserError.Log.d(TAG, "WAKE UP WAKE UP WAKE UP");
-            if (isEnabled()) {
-
-                final String mac = ""; // TODO: load from settings class
-                if (emptyString(mac)) {
-                    // if mac not set then start up a scan and do nothing else
-                    new FindNearby().scan();
-                } else {
-
-                    setAddress(mac);
-                    // commonServiceStart();
-                    if (intent != null) {
-                        final String function = intent.getStringExtra("function");
-                        if (function != null) {
-                            switch (function) {
-
-                                case "failover":
-                                    changeState(CLOSE);
-                                    break;
-                                case "reset":
-                                    JoH.static_toast_long("Searching for Pen");
-                                    // InPen.setMac("");
-                                    // InPenEntry.startWithRefresh();
-                                    break;
-                                case "refresh":
-                                    // currentPenAttachTime = null;
-                                    // currentPenTime = null;
-                                    changeState(INIT);
-                                    break;
-                                case "prototype":
-                                    //     changeState(PROTOTYPE);
-                                    break;
-                                case "sendglucose":
-                                    sendGlucose();
-                                    break;
-                            }
-                        }
-                    }
-                }
-                // setFailOverTimer();
-                return START_STICKY;
-            } else {
+            if (!isEnabled()) {
                 UserError.Log.d(TAG, "Service is NOT set be active - shutting down");
                 stopSelf();
                 return START_NOT_STICKY;
             }
+
+            final String mac = Pref.getStringDefaultBlank(PREF_BLE_DISPLAY_MAC);
+            if (emptyString(mac)) {
+                // setFailOverTimer();
+                return START_STICKY;
+            }
+
+            setAddress(mac);
+            JoH.static_toast_long("BLE Display");
+
+            if (intent != null) {
+                final String function = intent.getStringExtra("function");
+                if (function != null) {
+                    switch (function) {
+                        case "sendglucose":
+                            sendGlucose();
+                            break;
+                        default:
+                            UserError.Log.e(TAG, "Unknown function: " + function);
+                            break;
+                    }
+                }
+            }
+
+            // setFailOverTimer();
+            return START_STICKY;
         } finally {
             JoH.releaseWakeLock(wl);
         }
